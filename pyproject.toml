@@ -1,0 +1,17 @@
+[project]
+name = "pde-solver"
+version = "1.0.0"
+description = "Physics-Informed Neural Network solver for the Burgers equation"
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
