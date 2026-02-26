@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PINN PDE Solver</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #08090c;
+      --bg-raised: #0d0f14;
+      --surface: #12141b;
+      --surface-hover: #191c26;
+      --border: #1e2130;
+      --border-active: #2d3248;
+      --text: #c8ccd8;
+      --text-bright: #e8eaf2;
+      --text-muted: #5c6178;
+      --accent: #e8a443;
+      --accent-dim: rgba(232, 164, 67, 0.12);
+      --accent-glow: rgba(232, 164, 67, 0.25);
+      --trace: #e8a443;
+      --trace-fill: rgba(232, 164, 67, 0.05);
+      --error: #e85454;
+      --success: #45b86e;
+      --untrained: #5c6178;
+      --radius: 6px;
+      --radius-lg: 10px;
+      --font: 'IBM Plex Sans', -apple-system, system-ui, sans-serif;
+      --mono: 'IBM Plex Mono', 'SF Mono', 'Consolas', monospace;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Layout: sidebar + main ─────────────────────────────── */
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ────────────────────────────────────────────── */
+    .sidebar {
+      background: var(--bg-raised);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-header {
+      padding: 1.25rem 1.25rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-header h1 {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.15rem;
+    }
+
+    .sidebar-header .subtitle {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      letter-spacing: 0.02em;
+    }
+
+    .sidebar-section-label {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 1rem 1.25rem 0.5rem;
+    }
+
+    .eq-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 0.5rem 0.5rem;
+    }
+
+    .eq-item {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.6rem 0.75rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all 0.12s;
+      border: 1px solid transparent;
+      margin-bottom: 1px;
+    }
+
+    .eq-item:hover {
+      background: var(--surface);
+      border-color: var(--border);
+    }
+
+    .eq-item.active {
+      background: var(--surface);
+      border-color: var(--accent);
+      box-shadow: inset 3px 0 0 var(--accent), 0 0 12px var(--accent-dim);
+    }
+
+    .eq-item.untrained { opacity: 0.45; }
+
+    .eq-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--success);
+      box-shadow: 0 0 6px rgba(69, 184, 110, 0.4);
+    }
+
+    .eq-item.untrained .eq-dot {
+      background: var(--untrained);
+      box-shadow: none;
+    }
+
+    .eq-info {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .eq-name {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .eq-item.untrained .eq-name { color: var(--text-muted); }
+
+    .eq-desc {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+
+    .eq-tag {
+      font-family: var(--mono);
+      font-size: 0.55rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.15em 0.45em;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .eq-tag.trained {
+      background: rgba(69, 184, 110, 0.1);
+      color: var(--success);
+      border: 1px solid rgba(69, 184, 110, 0.2);
+    }
+
+    .eq-tag.not-trained {
+      background: rgba(92, 97, 120, 0.1);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .sidebar-footer {
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--text-muted);
+    }
+
+    /* ── Main panel ─────────────────────────────────────────── */
+    .main {
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      gap: 1.25rem;
+    }
+
+    /* ── Status strip ───────────────────────────────────────── */
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .status-strip .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+
+    .status-strip .dot.error { background: var(--error); }
+    .status-strip .dot.loading {
+      background: var(--accent);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .status-strip .eq-title {
+      color: var(--text-bright);
+      font-weight: 600;
+      font-size: 0.85rem;
+      font-family: var(--font);
+    }
+
+    .status-strip .sep {
+      color: var(--border-active);
+      user-select: none;
+    }
+
+    /* ── Controls bar ───────────────────────────────────────── */
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 0.65rem 1rem;
+    }
+
+    .controls-bar label {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    input[type=range] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 3px solid var(--bg);
+      box-shadow: 0 0 0 1.5px var(--accent), 0 0 8px var(--accent-dim);
+      cursor: pointer;
+      transition: box-shadow 0.15s;
+    }
+
+    input[type=range]::-webkit-slider-thumb:hover {
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 0 0 1.5px var(--accent);
+    }
+
+    input[type=range]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 3px solid var(--bg);
+      cursor: pointer;
+    }
+
+    .time-readout {
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      min-width: 52px;
+      text-align: right;
+      letter-spacing: 0.02em;
+      text-shadow: 0 0 12px var(--accent-dim);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 2px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      padding: 0.4rem 0.7rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      font-family: var(--mono);
+      letter-spacing: 0.02em;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.12s;
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+
+    .btn:hover { background: var(--surface-hover); border-color: var(--border-active); }
+    .btn:active { transform: scale(0.97); }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+    }
+
+    .btn.primary:hover { filter: brightness(1.1); }
+
+    .btn svg {
+      width: 13px;
+      height: 13px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .speed-chip {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid rgba(232, 164, 67, 0.15);
+      padding: 0.2em 0.5em;
+      border-radius: 4px;
+    }
+
+    /* ── Oscilloscope plot ──────────────────────────────────── */
+    .scope {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      flex: 1;
+      min-height: 380px;
+    }
+
+    .scope .loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(8, 9, 12, 0.75);
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .scope .loading-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #plotDiv { width: 100%; height: 100%; min-height: 380px; }
+
+    /* ── Info strip (equation details) ──────────────────────── */
+    .info-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+    }
+
+    .info-cell {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.7rem 0.85rem;
+      min-height: 58px;
+    }
+
+    .info-cell .lbl {
+      font-family: var(--mono);
+      font-size: 0.55rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      margin-bottom: 0.3rem;
+    }
+
+    .info-cell .val {
+      font-size: 0.82rem;
+      color: var(--text-bright);
+      line-height: 1.5;
+      overflow-x: auto;
+    }
+
+    .info-cell .val .katex { font-size: 0.85em; }
+
+    /* ── Error toast ────────────────────────────────────────── */
+    .error-toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: rgba(232, 84, 84, 0.08);
+      border: 1px solid rgba(232, 84, 84, 0.25);
+      color: var(--error);
+      padding: 0.65rem 1.1rem;
+      border-radius: var(--radius);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      max-width: 360px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: all 0.2s;
+      pointer-events: none;
+      z-index: 200;
+    }
+
+    .error-toast.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    /* ── Responsive ─────────────────────────────────────────── */
+    @media (max-width: 800px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+      .sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        max-height: 260px;
+      }
+      .main { padding: 1rem; }
+      .info-strip { grid-template-columns: repeat(2, 1fr); }
+      #plotDiv { min-height: 300px; }
+    }
+
+    @media (max-width: 500px) {
+      .info-strip { grid-template-columns: 1fr; }
+      .controls-bar { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ─── Sidebar: Equation Selector ─── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1>PDE Solver</h1>
+      <div class="subtitle">Physics-Informed Neural Networks</div>
+    </div>
+    <div class="sidebar-section-label">Equations</div>
+    <div class="eq-list" id="eqList" role="listbox" aria-label="Select equation"></div>
+    <div class="sidebar-footer" id="sidebarFooter">Loading…</div>
+  </aside>
+
+  <!-- ─── Main Panel ─── -->
+  <main class="main">
+    <!-- Status strip -->
+    <div class="status-strip" role="status" aria-live="polite">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">Connecting…</span>
+      <span class="sep">·</span>
+      <span class="eq-title" id="eqTitleDisplay">—</span>
+    </div>
+
+    <!-- Controls bar -->
+    <div class="controls-bar" role="group" aria-label="Time controls">
+      <label for="timeSlider">t</label>
+      <input type="range" id="timeSlider" min="0" max="1" step="0.01" value="0.0"
+             aria-label="Time" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0">
+      <span class="time-readout" id="timeDisplay" aria-live="polite">0.00</span>
+
+      <div class="btn-group">
+        <button class="btn primary" id="playBtn" aria-label="Play animation">
+          <svg viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="btn" id="resetBtn" aria-label="Reset to t=0">
+          <svg viewBox="0 0 24 24"><polyline points="1,4 1,10 7,10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        </button>
+      </div>
+
+      <button class="btn" id="exportBtn" aria-label="Export CSV">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        CSV
+      </button>
+
+      <button class="btn" id="speedBtn" aria-label="Change speed">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+      </button>
+      <span class="speed-chip" id="speedLabel">1×</span>
+    </div>
+
+    <!-- Oscilloscope plot -->
+    <div class="scope">
+      <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+      <div id="plotDiv" role="img" aria-label="PDE solution plot"></div>
+    </div>
+
+    <!-- Info strip -->
+    <div class="info-strip" id="infoStrip">
+      <div class="info-cell"><div class="lbl">Equation</div><div class="val" id="infoEq">—</div></div>
+      <div class="info-cell"><div class="lbl">Initial Condition</div><div class="val" id="infoIC">—</div></div>
+      <div class="info-cell"><div class="lbl">Boundary</div><div class="val" id="infoBC">—</div></div>
+      <div class="info-cell"><div class="lbl">Domain</div><div class="val" id="infoDomain">—</div></div>
+    </div>
+  </main>
+</div>
+
+<div class="error-toast" id="errorToast" role="alert" aria-live="assertive"></div>
+
+<script>
+  // ───────────────────────────────────────────────────────────────────────────
+  // Config
+  // ───────────────────────────────────────────────────────────────────────────
+  const API_BASE = (location.hostname === "127.0.0.1" || location.hostname === "localhost")
+    ? `http://${location.hostname}:8000` : "";
+  const DEBOUNCE_MS = 50;
+  const ANIM_BASE_MS = 60;
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // DOM
+  // ───────────────────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const slider      = $("timeSlider");
+  const timeDisplay = $("timeDisplay");
+  const statusDot   = $("statusDot");
+  const statusText  = $("statusText");
+  const overlay     = $("loadingOverlay");
+  const toast       = $("errorToast");
+  const playBtn     = $("playBtn");
+  const resetBtn    = $("resetBtn");
+  const exportBtn   = $("exportBtn");
+  const speedBtn    = $("speedBtn");
+  const speedLabel  = $("speedLabel");
+  const eqList      = $("eqList");
+  const eqTitle     = $("eqTitleDisplay");
+  const footer      = $("sidebarFooter");
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // State
+  // ───────────────────────────────────────────────────────────────────────────
+  let equations = [];
+  let activeEq = null;     // current equation metadata object
+  let debounceTimer = null;
+  let isPlaying = false;
+  let animTimer = null;
+  let lastData = null;
+  let inFlight = false;
+  const speeds = [0.5, 1, 2, 4];
+  let speedIdx = 1;
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ───────────────────────────────────────────────────────────────────────────
+  function setStatus(type, msg) {
+    statusDot.className = "dot" + (type === "error" ? " error" : type === "loading" ? " loading" : "");
+    statusText.textContent = msg;
+  }
+
+  function showError(msg) {
+    toast.textContent = msg;
+    toast.classList.add("visible");
+    setTimeout(() => toast.classList.remove("visible"), 4000);
+  }
+
+  function setLoading(on) { overlay.classList.toggle("visible", on); }
+
+  function renderLatex(el, latex) {
+    if (typeof katex !== "undefined") {
+      katex.render(latex, el, { throwOnError: false, displayMode: false });
+    } else {
+      el.textContent = latex;
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Equation list
+  // ───────────────────────────────────────────────────────────────────────────
+  async function fetchEquations() {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/equations`);
+      equations = await res.json();
+      renderSidebar();
+      footer.textContent = `${equations.length} equations · ${equations.filter(e=>e.trained).length} trained`;
+    } catch {
+      footer.textContent = "Failed to load equations";
+    }
+  }
+
+  function renderSidebar() {
+    eqList.innerHTML = "";
+    equations.forEach(eq => {
+      const div = document.createElement("div");
+      div.className = "eq-item" + (eq.trained ? "" : " untrained");
+      div.setAttribute("role", "option");
+      div.setAttribute("aria-selected", "false");
+      div.dataset.key = eq.key;
+      div.innerHTML = `
+        <div class="eq-dot"></div>
+        <div class="eq-info">
+          <div class="eq-name">${eq.name}</div>
+          <div class="eq-desc">${eq.description}</div>
+        </div>
+        <span class="eq-tag ${eq.trained ? "trained" : "not-trained"}">${eq.trained ? "ready" : "untrained"}</span>
+      `;
+      div.addEventListener("click", () => selectEquation(eq));
+      eqList.appendChild(div);
+    });
+  }
+
+  function selectEquation(eq) {
+    if (!eq.trained) {
+      showError(`"${eq.name}" is not trained yet. Run: python pinn_model.py --equation ${eq.key}`);
+      return;
+    }
+    stopAnimation();
+    activeEq = eq;
+    slider.value = 0;
+    timeDisplay.textContent = "0.00";
+    lastData = null;
+
+    // Update sidebar active state
+    eqList.querySelectorAll(".eq-item").forEach(el => {
+      const isActive = el.dataset.key === eq.key;
+      el.classList.toggle("active", isActive);
+      el.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+
+    // Update title
+    eqTitle.textContent = eq.name;
+
+    // Update info cards
+    renderLatex($("infoEq"), eq.latex_equation);
+    renderLatex($("infoIC"), eq.latex_ic);
+    renderLatex($("infoBC"), eq.latex_bc);
+    renderLatex($("infoDomain"), eq.latex_domain);
+
+    // Update plot
+    initPlot();
+    fetchPrediction(0);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // API: Health
+  // ───────────────────────────────────────────────────────────────────────────
+  async function checkHealth() {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/health`);
+      const data = await res.json();
+      if (data.models_available > 0) {
+        setStatus("ok", `${data.models_available} model(s) loaded`);
+        return true;
+      } else {
+        setStatus("error", "No models loaded");
+        return false;
+      }
+    } catch {
+      setStatus("error", "Cannot reach server");
+      return false;
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // API: Predict
+  // ───────────────────────────────────────────────────────────────────────────
+  async function fetchPrediction(t) {
+    if (!activeEq || inFlight) return;
+    inFlight = true;
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/predict/${activeEq.key}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ t: parseFloat(t) }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error ${res.status}`);
+      }
+      const data = await res.json();
+      lastData = data;
+      updatePlot(data);
+      setStatus("ok", `${activeEq.name} · t = ${data.t.toFixed(2)}`);
+    } catch (e) {
+      showError(e.message || "Request failed");
+      setStatus("error", "Request failed");
+    } finally {
+      inFlight = false;
+      setLoading(false);
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Plot
+  // ───────────────────────────────────────────────────────────────────────────
+  function getLayout(title) {
+    const eq = activeEq || {};
+    const xPad = ((eq.x_max || 1) - (eq.x_min || -1)) * 0.03;
+    return {
+      title: { text: title || "—", font: { size: 13, color: "#c8ccd8", family: "IBM Plex Sans" } },
+      xaxis: {
+        title: { text: "x", font: { color: "#5c6178", family: "IBM Plex Mono", size: 12 } },
+        range: [(eq.x_min || -1) - xPad, (eq.x_max || 1) + xPad],
+        color: "#5c6178", gridcolor: "#1e2130", zerolinecolor: "#2d3248",
+        gridwidth: 1,
+      },
+      yaxis: {
+        title: { text: eq.y_label || "u(x,t)", font: { color: "#5c6178", family: "IBM Plex Mono", size: 12 } },
+        range: [eq.y_min || -1.3, eq.y_max || 1.3],
+        color: "#5c6178", gridcolor: "#1e2130", zerolinecolor: "#2d3248",
+        gridwidth: 1,
+      },
+      paper_bgcolor: "rgba(0,0,0,0)",
+      plot_bgcolor: "rgba(0,0,0,0)",
+      margin: { l: 55, r: 16, t: 40, b: 42 },
+      font: { family: "IBM Plex Mono, monospace" },
+    };
+  }
+
+  const PLOT_CFG = { responsive: true, displayModeBar: false };
+
+  function updatePlot(data) {
+    const template = (activeEq && activeEq.plot_title_template) || "Solution at t = {t:.2f}";
+    const title = template.replace("{t:.2f}", data.t.toFixed(2));
+
+    const trace = {
+      x: data.x, y: data.u, mode: "lines",
+      line: { color: "#e8a443", width: 2, shape: "spline" },
+      name: `t = ${data.t.toFixed(2)}`,
+      fill: "tozeroy",
+      fillcolor: "rgba(232, 164, 67, 0.04)",
+    };
+    Plotly.react("plotDiv", [trace], getLayout(title), PLOT_CFG);
+  }
+
+  function initPlot() {
+    Plotly.newPlot("plotDiv", [], getLayout("Select an equation"), PLOT_CFG);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Slider / Debounce
+  // ───────────────────────────────────────────────────────────────────────────
+  function debouncedUpdate(t) {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => fetchPrediction(t), DEBOUNCE_MS);
+  }
+
+  slider.addEventListener("input", function () {
+    timeDisplay.textContent = parseFloat(this.value).toFixed(2);
+    this.setAttribute("aria-valuenow", this.value);
+    debouncedUpdate(this.value);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Animation
+  // ───────────────────────────────────────────────────────────────────────────
+  function togglePlay() { isPlaying ? stopAnimation() : startAnimation(); }
+
+  function startAnimation() {
+    if (!activeEq) return;
+    isPlaying = true;
+    playBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" fill="currentColor" stroke="none"/></svg>';
+
+    function step() {
+      let c = parseFloat(slider.value) + 0.01 * speeds[speedIdx];
+      if (c > 1) c = 0;
+      c = Math.round(c * 100) / 100;
+      slider.value = c;
+      timeDisplay.textContent = c.toFixed(2);
+      slider.setAttribute("aria-valuenow", c);
+      fetchPrediction(c);
+      if (isPlaying) animTimer = setTimeout(step, ANIM_BASE_MS / speeds[speedIdx]);
+    }
+    step();
+  }
+
+  function stopAnimation() {
+    isPlaying = false;
+    clearTimeout(animTimer);
+    playBtn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21" fill="currentColor" stroke="none"/></svg>';
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Buttons
+  // ───────────────────────────────────────────────────────────────────────────
+  playBtn.addEventListener("click", togglePlay);
+
+  resetBtn.addEventListener("click", () => {
+    stopAnimation();
+    slider.value = 0;
+    timeDisplay.textContent = "0.00";
+    slider.setAttribute("aria-valuenow", "0");
+    fetchPrediction(0);
+  });
+
+  speedBtn.addEventListener("click", () => {
+    speedIdx = (speedIdx + 1) % speeds.length;
+    speedLabel.textContent = `${speeds[speedIdx]}×`;
+  });
+
+  exportBtn.addEventListener("click", () => {
+    if (!lastData || !activeEq) { showError("No data to export."); return; }
+    const rows = ["x,u"];
+    for (let i = 0; i < lastData.x.length; i++) rows.push(`${lastData.x[i]},${lastData.u[i]}`);
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeEq.key}_t${lastData.t.toFixed(2)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Keyboard
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.code === "Space") { e.preventDefault(); togglePlay(); }
+    if (e.code === "KeyR") resetBtn.click();
+    if (e.code === "ArrowRight") {
+      slider.value = Math.min(1, parseFloat(slider.value) + 0.01).toFixed(2);
+      timeDisplay.textContent = parseFloat(slider.value).toFixed(2);
+      debouncedUpdate(slider.value);
+    }
+    if (e.code === "ArrowLeft") {
+      slider.value = Math.max(0, parseFloat(slider.value) - 0.01).toFixed(2);
+      timeDisplay.textContent = parseFloat(slider.value).toFixed(2);
+      debouncedUpdate(slider.value);
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Init
+  // ───────────────────────────────────────────────────────────────────────────
+  (async function init() {
+    initPlot();
+    const healthy = await checkHealth();
+    await fetchEquations();
+    // Auto-select first trained equation
+    if (equations.length) {
+      const first = equations.find(e => e.trained) || equations[0];
+      if (first.trained) selectEquation(first);
+    }
+  })();
+</script>
+
+</body>
+</html>
