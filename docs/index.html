@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDE Solver -- Physics-Informed Neural Networks</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+<style>
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-primary: #0f1729;
+  --bg-secondary: #162037;
+  --bg-tertiary: #1c2a4a;
+  --bg-card: #182240;
+  --border-subtle: rgba(100, 140, 200, 0.12);
+  --border-active: rgba(100, 180, 220, 0.35);
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #5eead4;
+  --accent-dim: rgba(94, 234, 212, 0.15);
+  --accent-secondary: #f0b76a;
+  --accent-secondary-dim: rgba(240, 183, 106, 0.12);
+  --trace-color: #5eead4;
+  --trace-glow: rgba(94, 234, 212, 0.3);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Cascadia Code", monospace;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ---- Header ---- */
+header {
+  padding: 48px 0 12px;
+  text-align: center;
+}
+
+header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+header h1 span {
+  color: var(--accent);
+}
+
+header .subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+/* ---- Equation selector pills ---- */
+.pill-bar {
+  display: flex;
+  gap: 8px;
+  padding: 20px 0 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.pill-bar::-webkit-scrollbar { display: none; }
+
+.pill {
+  padding: 7px 18px;
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  user-select: none;
+  letter-spacing: 0.01em;
+}
+
+.pill:hover {
+  border-color: var(--border-active);
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.pill.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* ---- Plot area ---- */
+.plot-wrapper {
+  position: relative;
+  margin: 8px 0 0;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+#plot {
+  width: 100%;
+  height: 420px;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 41, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.loading-overlay.hidden {
+  opacity: 0;
+}
+
+.loading-text {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.loading-text::after {
+  content: '';
+  animation: ellipsis 1.2s steps(3, end) infinite;
+}
+
+@keyframes ellipsis {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
+}
+
+/* ---- Time controls ---- */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.btn-play {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--border-active);
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-play:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.btn-play svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.slider-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.slider-label {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 88px;
+}
+
+.slider-label .val {
+  color: var(--accent);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-tertiary);
+  outline: none;
+  min-width: 0;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 0 8px var(--trace-glow);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 0 8px var(--trace-glow);
+}
+
+.speed-select {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.speed-select:focus {
+  border-color: var(--border-active);
+}
+
+/* ---- Info panel ---- */
+.info-panel {
+  margin: 8px 0 0;
+  padding: 24px 28px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.info-panel .eq-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.info-panel .eq-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.math-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 20px;
+  align-items: baseline;
+}
+
+.math-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.math-value {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.math-value::-webkit-scrollbar { display: none; }
+
+.math-value .katex {
+  font-size: 1.05rem;
+}
+
+/* ---- Footer ---- */
+footer {
+  text-align: center;
+  padding: 40px 0 36px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 32px;
+}
+
+footer .footer-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+
+footer a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: color 0.2s, border-color 0.2s;
+}
+
+footer a:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 640px) {
+  header { padding: 32px 0 8px; }
+  header h1 { font-size: 1.25rem; }
+  .pill-bar { justify-content: flex-start; flex-wrap: nowrap; padding: 16px 0 12px; }
+  #plot { height: 300px; }
+  .controls { flex-wrap: wrap; gap: 12px; }
+  .slider-group { min-width: 100%; order: 1; }
+  .info-panel { padding: 20px; }
+  .math-grid { grid-template-columns: 1fr; gap: 6px 0; }
+  .math-label { margin-top: 8px; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <h1>PDE <span>Solver</span></h1>
+    <p class="subtitle">Physics-Informed Neural Networks &mdash; live in your browser</p>
+  </header>
+
+  <nav class="pill-bar" id="pillBar"></nav>
+
+  <div class="plot-wrapper">
+    <div class="loading-overlay" id="loadingOverlay">
+      <span class="loading-text">Computing</span>
+    </div>
+    <div id="plot"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-play" id="btnPlay" title="Play / Pause">
+      <svg id="iconPlay" viewBox="0 0 24 24"><polygon points="6,3 20,12 6,21"/></svg>
+      <svg id="iconPause" viewBox="0 0 24 24" style="display:none"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>
+    </button>
+    <div class="slider-group">
+      <label class="slider-label">t = <span class="val" id="tDisplay">0.000</span></label>
+      <input type="range" id="tSlider" min="0" max="1000" value="0">
+    </div>
+    <select class="speed-select" id="speedSelect" title="Playback speed">
+      <option value="0.5">0.5x</option>
+      <option value="1" selected>1x</option>
+      <option value="2">2x</option>
+    </select>
+  </div>
+
+  <div class="info-panel" id="infoPanel">
+    <div class="eq-title" id="eqTitle"></div>
+    <div class="eq-desc" id="eqDesc"></div>
+    <div class="math-grid" id="mathGrid"></div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="container">
+    <p class="footer-note">
+      <a href="https://github.com" target="_blank" rel="noopener">View source on GitHub</a><br>
+      Runs entirely in your browser &mdash; no server needed.
+    </p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---- State ----
+  const cache = {};
+  let model = null;
+  let manifest = [];
+  let activeKey = null;
+  let playing = false;
+  let tNorm = 0;          // 0..1 normalized
+  let speed = 1;
+  let animId = null;
+  let lastFrameTime = 0;
+  let plotInitialized = false;
+
+  // ---- DOM refs ----
+  const pillBar       = document.getElementById('pillBar');
+  const plot          = document.getElementById('plot');
+  const loadingEl     = document.getElementById('loadingOverlay');
+  const btnPlay       = document.getElementById('btnPlay');
+  const iconPlay      = document.getElementById('iconPlay');
+  const iconPause     = document.getElementById('iconPause');
+  const tSlider       = document.getElementById('tSlider');
+  const tDisplay      = document.getElementById('tDisplay');
+  const speedSelect   = document.getElementById('speedSelect');
+  const eqTitle       = document.getElementById('eqTitle');
+  const eqDesc        = document.getElementById('eqDesc');
+  const mathGrid      = document.getElementById('mathGrid');
+
+  // ---- Neural network forward pass ----
+  function inference(layers, x, t) {
+    let h = [x, t];
+    for (let i = 0; i < layers.length; i++) {
+      const W = layers[i].W;
+      const b = layers[i].b;
+      const out = new Array(W.length);
+      for (let j = 0; j < W.length; j++) {
+        let s = b[j];
+        const Wj = W[j];
+        for (let k = 0; k < h.length; k++) {
+          s += Wj[k] * h[k];
+        }
+        out[j] = s;
+      }
+      if (i < layers.length - 1) {
+        for (let j = 0; j < out.length; j++) {
+          out[j] = Math.tanh(out[j]);
+        }
+      }
+      h = out;
+    }
+    return h[0];
+  }
+
+  // ---- Compute solution over spatial domain ----
+  function computeSolution(m, t) {
+    const N = 200;
+    const xs = new Array(N);
+    const us = new Array(N);
+    const dx = (m.x_max - m.x_min) / (N - 1);
+    for (let i = 0; i < N; i++) {
+      xs[i] = m.x_min + i * dx;
+      us[i] = inference(m.layers, xs[i], t);
+    }
+    return { xs, us };
+  }
+
+  // ---- Plot ----
+  const plotLayout = {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    margin: { t: 30, r: 30, b: 50, l: 60 },
+    xaxis: {
+      title: { text: 'x', font: { size: 13, color: '#64748b', family: 'var(--font-sans)' } },
+      color: '#475569',
+      gridcolor: 'rgba(100,140,200,0.08)',
+      zerolinecolor: 'rgba(100,140,200,0.15)',
+      tickfont: { size: 11, color: '#64748b', family: '"SF Mono","Fira Code",monospace' },
+      showgrid: true,
+    },
+    yaxis: {
+      title: { text: 'u(x, t)', font: { size: 13, color: '#64748b', family: 'var(--font-sans)' } },
+      color: '#475569',
+      gridcolor: 'rgba(100,140,200,0.08)',
+      zerolinecolor: 'rgba(100,140,200,0.15)',
+      tickfont: { size: 11, color: '#64748b', family: '"SF Mono","Fira Code",monospace' },
+      showgrid: true,
+    },
+    font: { family: '-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif' },
+    hoverlabel: {
+      bgcolor: '#1c2a4a',
+      bordercolor: '#5eead4',
+      font: { color: '#e2e8f0', size: 12, family: '"SF Mono","Fira Code",monospace' },
+    },
+  };
+
+  const plotConfig = {
+    responsive: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'],
+  };
+
+  function initPlot(xs, us) {
+    const trace = {
+      x: xs,
+      y: us,
+      type: 'scatter',
+      mode: 'lines',
+      line: { color: '#5eead4', width: 2.5, shape: 'spline', smoothing: 0.8 },
+      hovertemplate: 'x = %{x:.3f}<br>u = %{y:.4f}<extra></extra>',
+    };
+
+    const layout = Object.assign({}, plotLayout);
+    if (model) {
+      layout.yaxis = Object.assign({}, plotLayout.yaxis, {
+        range: [model.y_min, model.y_max],
+        title: { text: model.y_label || 'u(x, t)', font: plotLayout.yaxis.title.font },
+      });
+      layout.xaxis = Object.assign({}, plotLayout.xaxis, {
+        range: [model.x_min, model.x_max],
+      });
+    }
+
+    Plotly.newPlot(plot, [trace], layout, plotConfig);
+    plotInitialized = true;
+  }
+
+  function updatePlot(xs, us) {
+    if (!plotInitialized) {
+      initPlot(xs, us);
+      return;
+    }
+    Plotly.restyle(plot, { x: [xs], y: [us] }, [0]);
+  }
+
+  function refreshPlot() {
+    if (!model) return;
+    const t = model.t_min + tNorm * (model.t_max - model.t_min);
+    const { xs, us } = computeSolution(model, t);
+    updatePlot(xs, us);
+  }
+
+  // ---- Loading state ----
+  function showLoading() { loadingEl.classList.remove('hidden'); }
+  function hideLoading() { loadingEl.classList.add('hidden'); }
+
+  // ---- Info panel ----
+  function renderInfo(m) {
+    eqTitle.textContent = m.name;
+    eqDesc.textContent = m.description;
+
+    const entries = [
+      ['Equation', m.latex_equation],
+      ['Initial Cond.', m.latex_ic],
+      ['Boundary Cond.', m.latex_bc],
+      ['Domain', m.latex_domain],
+    ];
+
+    mathGrid.innerHTML = '';
+    entries.forEach(function (pair) {
+      const lbl = document.createElement('span');
+      lbl.className = 'math-label';
+      lbl.textContent = pair[0];
+      mathGrid.appendChild(lbl);
+
+      const val = document.createElement('span');
+      val.className = 'math-value';
+      mathGrid.appendChild(val);
+
+      // Render KaTeX after element is in DOM
+      if (window.katex) {
+        katex.render(pair[1], val, { throwOnError: false, displayMode: false });
+      } else {
+        val.textContent = pair[1];
+      }
+    });
+  }
+
+  // Retry KaTeX render once the script loads
+  function retryKatex() {
+    if (!model || !window.katex) return;
+    renderInfo(model);
+  }
+
+  // ---- Equation loading ----
+  async function loadEquation(key) {
+    if (key === activeKey && model) return;
+    activeKey = key;
+
+    // Update pills
+    Array.from(pillBar.children).forEach(function (el) {
+      el.classList.toggle('active', el.dataset.key === key);
+    });
+
+    if (cache[key]) {
+      model = cache[key];
+      onModelReady();
+      return;
+    }
+
+    showLoading();
+    try {
+      const resp = await fetch('weights/' + key + '.json');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      cache[key] = data;
+      // Only apply if still the active selection
+      if (activeKey === key) {
+        model = data;
+        onModelReady();
+      }
+    } catch (err) {
+      console.error('Failed to load ' + key + ':', err);
+      hideLoading();
+    }
+  }
+
+  function onModelReady() {
+    // Reset time
+    tNorm = 0;
+    tSlider.value = 0;
+    updateTimeDisplay();
+
+    // Update y-axis range and label for new equation
+    if (plotInitialized) {
+      Plotly.relayout(plot, {
+        'yaxis.range': [model.y_min, model.y_max],
+        'yaxis.title.text': model.y_label || 'u(x, t)',
+        'xaxis.range': [model.x_min, model.x_max],
+      });
+    }
+
+    renderInfo(model);
+    refreshPlot();
+    hideLoading();
+  }
+
+  // ---- Time display ----
+  function updateTimeDisplay() {
+    if (!model) return;
+    const t = model.t_min + tNorm * (model.t_max - model.t_min);
+    tDisplay.textContent = t.toFixed(3);
+  }
+
+  // ---- Animation ----
+  function startAnimation() {
+    playing = true;
+    iconPlay.style.display = 'none';
+    iconPause.style.display = 'block';
+    lastFrameTime = performance.now();
+    animLoop();
+  }
+
+  function stopAnimation() {
+    playing = false;
+    iconPlay.style.display = 'block';
+    iconPause.style.display = 'none';
+    if (animId) {
+      cancelAnimationFrame(animId);
+      animId = null;
+    }
+  }
+
+  function animLoop() {
+    if (!playing) return;
+    const now = performance.now();
+    const dt = (now - lastFrameTime) / 1000;
+    lastFrameTime = now;
+
+    // Advance t. Full sweep in ~3s at 1x speed.
+    tNorm += dt * speed / 3.0;
+    if (tNorm >= 1) {
+      tNorm = tNorm % 1;
+    }
+
+    tSlider.value = Math.round(tNorm * 1000);
+    updateTimeDisplay();
+    refreshPlot();
+
+    animId = requestAnimationFrame(animLoop);
+  }
+
+  // ---- Event listeners ----
+  btnPlay.addEventListener('click', function () {
+    if (playing) { stopAnimation(); } else { startAnimation(); }
+  });
+
+  tSlider.addEventListener('input', function () {
+    tNorm = parseInt(tSlider.value, 10) / 1000;
+    updateTimeDisplay();
+    refreshPlot();
+  });
+
+  speedSelect.addEventListener('change', function () {
+    speed = parseFloat(speedSelect.value);
+  });
+
+  // Keyboard: space to toggle, left/right to step
+  document.addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (playing) { stopAnimation(); } else { startAnimation(); }
+    } else if (e.code === 'ArrowRight') {
+      e.preventDefault();
+      tNorm = Math.min(1, tNorm + 0.01);
+      tSlider.value = Math.round(tNorm * 1000);
+      updateTimeDisplay();
+      refreshPlot();
+    } else if (e.code === 'ArrowLeft') {
+      e.preventDefault();
+      tNorm = Math.max(0, tNorm - 0.01);
+      tSlider.value = Math.round(tNorm * 1000);
+      updateTimeDisplay();
+      refreshPlot();
+    }
+  });
+
+  // ---- Build pill bar ----
+  function buildPills(names) {
+    names.forEach(function (entry) {
+      const btn = document.createElement('button');
+      btn.className = 'pill';
+      btn.dataset.key = entry.key;
+      btn.textContent = entry.name;
+      btn.addEventListener('click', function () {
+        loadEquation(entry.key);
+      });
+      pillBar.appendChild(btn);
+    });
+  }
+
+  // ---- Bootstrap ----
+  async function init() {
+    showLoading();
+    try {
+      const resp = await fetch('weights/manifest.json');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      manifest = await resp.json();
+
+      // manifest is an array of keys; we need names. Load first to get name, then build pills lazily.
+      // Strategy: load all names in parallel from the JSON metadata, but only load full weights for the first.
+      const metaPromises = manifest.map(function (key) {
+        return fetch('weights/' + key + '.json')
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            cache[key] = data;
+            return { key: data.key, name: data.name };
+          });
+      });
+
+      const metas = await Promise.all(metaPromises);
+      buildPills(metas);
+
+      // Activate first
+      if (manifest.length > 0) {
+        await loadEquation(manifest[0]);
+      }
+    } catch (err) {
+      console.error('Init failed:', err);
+      hideLoading();
+    }
+  }
+
+  // Wait for KaTeX to be ready, then re-render
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      init();
+      // KaTeX deferred load
+      var checkKatex = setInterval(function () {
+        if (window.katex) { clearInterval(checkKatex); retryKatex(); }
+      }, 100);
+    });
+  } else {
+    init();
+    var checkKatex = setInterval(function () {
+      if (window.katex) { clearInterval(checkKatex); retryKatex(); }
+    }, 100);
+  }
+})();
+</script>
+
+</body>
+</html>
