@@ -6,9 +6,7 @@ PINN-based solver for 10 partial differential equations, with a training CLI and
 
 This project uses [Physics-Informed Neural Networks](https://maziarraissi.github.io/PINNs/) (PINNs) to solve a collection of classical PDEs. Each equation gets its own trained model, served through a FastAPI backend and visualized in a single-page dashboard where you can scrub through time, switch equations, and export data.
 
-There's also a [live demo](https://YOUR_USERNAME.github.io/pde-solver/) on GitHub Pages that runs inference entirely client-side.
-
-![demo](docs/screenshot.png)
+There's also a [live demo](https://erik2810.github.io/pde-solver/) on GitHub Pages that runs inference entirely client-side.
 
 ## Quick start
 
@@ -88,7 +86,7 @@ The predict endpoint takes `{"t": 0.5, "n_points": 100}` and returns arrays of `
 
 ## Live demo
 
-The `docs/` directory contains a static build of the dashboard that runs on [GitHub Pages](https://YOUR_USERNAME.github.io/pde-solver/). It loads pre-exported model weights and does inference in JavaScript, so no backend needed.
+The `docs/` directory contains a static build of the dashboard that runs on [GitHub Pages](https://erik2810.github.io/pde-solver/). It loads pre-exported model weights and does inference in JavaScript, so no backend needed.
 
 ## License
 
