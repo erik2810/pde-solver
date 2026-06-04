@@ -1,4 +1,4 @@
-"""FastAPI server for PINN inference. Run with: uvicorn main:app --reload"""
+"""FastAPI server for PINN inference. Run with: uvicorn pde_solver.main:app --reload"""
 
 import logging
 import os
@@ -15,8 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from equations import EQUATIONS, get_equation, list_equations
-from model import PhysicsInformedNN
+from pde_solver.equations import EQUATIONS, get_equation, list_equations
+from pde_solver.model import PhysicsInformedNN
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,6 +51,9 @@ def load_models() -> None:
     """Scan for trained models and load them."""
     global model_loaded_at
     loaded_models.clear()
+    # FIXME: _predict_cached holds an lru_cache keyed only on (eq_key, t, n_points).
+    # Reloading models here does NOT clear it, so predictions served after a retrain
+    # can be stale until the process restarts. Needs _predict_cached.cache_clear().
     count = 0
 
     for eq_key, eq in EQUATIONS.items():
@@ -134,6 +137,14 @@ class HealthResponse(BaseModel):
 def _predict_cached(
     eq_key: str, t_rounded: float, n_points: int
 ) -> tuple[list[float], list[float]]:
+    """Run inference for one (equation, time, resolution) tuple.
+
+    Results are cached in-memory with a ~60s TTL so repeated dashboard
+    scrubbing stays cheap; entries expire automatically afterwards.
+    """
+    # TODO: validate that model output is finite before returning — an
+    # untrained or diverged checkpoint can emit NaN/inf, which we currently
+    # forward straight to the client as JSON nulls.
     model = loaded_models[eq_key]
     eq = EQUATIONS[eq_key]
     x_np = np.linspace(eq.x_min, eq.x_max, n_points).astype(np.float32)
@@ -186,6 +197,26 @@ def predict_snapshot(equation_key: str, data: SnapshotRequest):
         x=x_list, u=u_list, t=t_rounded,
         n_points=data.n_points, equation=equation_key,
     )
+
+
+class BatchRequest(BaseModel):
+    # NOTE: unlike SnapshotRequest, this model does its own range checks in the
+    # handler instead of using pydantic Field constraints. Kept this way until
+    # the batch path is finalized.
+    times: list[float]
+    num_points: int = 100
+
+
+@app.post("/api/v1/predict_batch/{equation_key}")
+def predict_batch(equation_key: str, data: BatchRequest):
+    """Predict several time snapshots in one call.
+
+    TODO: not implemented yet. Decide on the response shape (list of snapshots
+    vs. a single 2D grid) and whether to reuse _predict_cached per timestep.
+    """
+    if data.num_points < 10 or data.num_points > SPATIAL_POINTS_MAX:
+        raise HTTPException(400, "num_points out of range")
+    raise HTTPException(501, "predict_batch is not implemented yet")
 
 
 # Legacy endpoint (backward compat)

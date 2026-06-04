@@ -71,6 +71,7 @@ install_deps() {
     info "Installing dependencies..."
     pip install --upgrade pip --quiet
     pip install -r "$REQUIREMENTS" --quiet
+    pip install -e "$SCRIPT_DIR" --quiet
     ok "All dependencies installed"
 }
 
@@ -87,7 +88,7 @@ train_model() {
     fi
 
     info "Training PDE models (equation: $eq) — this may take several minutes..."
-    python "$SCRIPT_DIR/pinn_model.py" --equation "$eq" --no-show-plot --save-plot
+    python -m pde_solver.pinn_model --equation "$eq" --no-show-plot --save-plot
     ok "Training complete — models saved to models/"
 }
 
@@ -109,7 +110,7 @@ start_server() {
     echo "  └──────────────────────────────────────────────┘"
     echo -e "${NC}"
 
-    uvicorn main:app --host 127.0.0.1 --port "$PORT" --reload
+    uvicorn pde_solver.main:app --host 127.0.0.1 --port "$PORT" --reload
 }
 
 # ── Test ──────────────────────────────────────────────────────────────────────

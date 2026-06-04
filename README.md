@@ -22,9 +22,10 @@ Or do it manually:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .
 
-python pinn_model.py --equation all --no-show-plot
-uvicorn main:app --reload
+python -m pde_solver.pinn_model --equation all --no-show-plot
+uvicorn pde_solver.main:app --reload
 ```
 
 Then open http://127.0.0.1:8000.
@@ -46,13 +47,13 @@ Then open http://127.0.0.1:8000.
 
 ```bash
 # train a single equation
-python pinn_model.py --equation heat
+python -m pde_solver.pinn_model --equation heat
 
 # train everything
-python pinn_model.py --equation all --no-show-plot
+python -m pde_solver.pinn_model --equation all --no-show-plot
 
 # see what's available
-python pinn_model.py --list
+python -m pde_solver.pinn_model --list
 ```
 
 Each equation ships with its own default hyperparameters. You can override them:
@@ -69,20 +70,22 @@ Trained weights go to `models/{equation_key}_model.pth`.
 
 ## API
 
-The server (`main.py`) exposes a few endpoints:
+The server (`src/pde_solver/main.py`) exposes a few endpoints:
 
 - `GET /api/v1/health` -- status, loaded models, uptime
 - `GET /api/v1/equations` -- metadata for all registered equations
 - `POST /api/v1/predict/{equation_key}` -- predict u(x) at a given time `t`
 
-The predict endpoint takes `{"t": 0.5, "n_points": 100}` and returns arrays of `x` and `u` values.
+The predict endpoint takes `{"t": 0.5, "n_points": 100}` and returns arrays of `x`
+and `u` values. `n_points` is optional (10–1000). Responses are cached in-memory
+(roughly a minute) so scrubbing the time slider in the dashboard stays fast.
 
 ## Adding new equations
 
 - Subclass `PDEEquation` in `equations.py`
 - Implement `physics_loss()`, `initial_condition()`, `bc_left()`, `bc_right()`
 - Register it via `_register(YourClass)` at the bottom of the file
-- Train with `python pinn_model.py --equation your_key` -- the dashboard picks it up automatically
+- Train with `python -m pde_solver.pinn_model --equation your_key` -- the dashboard picks it up automatically
 
 ## Live demo
 

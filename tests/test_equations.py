@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from equations import (
+from pde_solver.equations import (
     EQUATIONS,
     BurgersEquation,
     HeatEquation,
@@ -18,7 +18,7 @@ from equations import (
     get_equation,
     list_equations,
 )
-from model import PhysicsInformedNN
+from pde_solver.model import PhysicsInformedNN
 
 
 class TestRegistry:

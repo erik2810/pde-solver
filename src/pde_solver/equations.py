@@ -382,6 +382,9 @@ class KdVEquation(PDEEquation):
         u_t = _grad(u, t)
         u_xx = _grad(u_x, x)
         u_xxx = _grad(u_xx, x)
+        # TODO: the advection coefficient (6) is hardcoded here, unlike the other
+        # equations which read their coefficients from self.params. Move it into
+        # params for consistency before exposing it in the dashboard.
         f = u_t + 6 * u * u_x + u_xxx
         return torch.mean(f ** 2)
 

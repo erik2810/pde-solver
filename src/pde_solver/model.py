@@ -40,7 +40,7 @@ class PhysicsInformedNN(nn.Module):
 
         New code should use equation.physics_loss(model, x, t) instead.
         """
-        from equations import BurgersEquation
+        from pde_solver.equations import BurgersEquation
 
         eq = BurgersEquation(nu=float(self.nu))
         return eq.physics_loss(self, x, t)

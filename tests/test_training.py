@@ -3,8 +3,8 @@
 import pytest
 import torch
 
-from equations import get_equation, BurgersEquation
-from pinn_model import get_training_data, train
+from pde_solver.equations import get_equation, BurgersEquation
+from pde_solver.pinn_model import get_training_data, train
 
 
 @pytest.fixture
@@ -96,7 +96,7 @@ class TestGetTrainingData:
 
     def test_all_equations_produce_valid_data(self):
         """Every registered equation should produce valid training data."""
-        from equations import EQUATIONS
+        from pde_solver.equations import EQUATIONS
 
         for key, eq in EQUATIONS.items():
             x_f, t_f, x_bc, t_bc, u_bc = get_training_data(eq, n_f=50, n_bc=20)
@@ -201,7 +201,7 @@ class TestTrain:
         assert model is not None
 
     def test_saved_model_is_loadable(self, tmp_path):
-        from model import PhysicsInformedNN
+        from pde_solver.model import PhysicsInformedNN
 
         output = tmp_path / "test_model.pth"
         train(
@@ -259,7 +259,7 @@ class TestTrain:
     def test_default_output_path(self, tmp_path, monkeypatch):
         """When output_path is None, model is saved to models/{key}_model.pth."""
         models_dir = tmp_path / "models"
-        monkeypatch.setattr("pinn_model.DEFAULT_OUTPUT_DIR", str(models_dir))
+        monkeypatch.setattr("pde_solver.pinn_model.DEFAULT_OUTPUT_DIR", str(models_dir))
         model = train(
             equation="burgers",
             epochs=5,

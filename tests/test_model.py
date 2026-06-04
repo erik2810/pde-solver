@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from model import PhysicsInformedNN
+from pde_solver.model import PhysicsInformedNN
 
 
 class TestPhysicsInformedNN:

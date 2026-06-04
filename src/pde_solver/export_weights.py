@@ -6,8 +6,8 @@ from pathlib import Path
 
 import torch
 
-from equations import EQUATIONS
-from model import PhysicsInformedNN
+from pde_solver.equations import EQUATIONS
+from pde_solver.model import PhysicsInformedNN
 
 
 def export_model(eq_key: str, model_path: Path, out_dir: Path) -> dict | None:

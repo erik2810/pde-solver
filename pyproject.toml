@@ -4,6 +4,13 @@ version = "1.0.0"
 description = "Physics-Informed Neural Network solver for the Burgers equation"
 requires-python = ">=3.11"
 
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -14,4 +21,5 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 asyncio_mode = "auto"

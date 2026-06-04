@@ -1,10 +1,10 @@
 """PINN training script for all registered PDEs.
 
 Usage:
-    python pinn_model.py                    # Burgers (default)
-    python pinn_model.py --equation heat
-    python pinn_model.py --equation all
-    python pinn_model.py --list
+    python -m pde_solver.pinn_model                    # Burgers (default)
+    python -m pde_solver.pinn_model --equation heat
+    python -m pde_solver.pinn_model --equation all
+    python -m pde_solver.pinn_model --list
 """
 
 import argparse
@@ -18,8 +18,8 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-from equations import EQUATIONS, PDEEquation, get_equation, list_equations
-from model import PhysicsInformedNN
+from .equations import EQUATIONS, PDEEquation, get_equation, list_equations
+from .model import PhysicsInformedNN
 
 logging.basicConfig(
     level=logging.INFO,
@@ -252,6 +252,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=str, default=None, help="Output model path")
     parser.add_argument("--save-plot", action="store_true")
     parser.add_argument("--no-show-plot", action="store_true")
+    # TODO: --resume is parsed but not wired up yet; training always starts
+    # from a fresh initialization regardless of this flag.
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="Resume training from an existing checkpoint at --output",
+    )
     return parser.parse_args()
 
 

@@ -132,7 +132,7 @@ if exist "%MODEL_DIR%\*.pth" (
     )
 )
 echo [INFO] Training PDE models (this may take several minutes)...
-python "%SCRIPT_DIR%pinn_model.py" --equation all --no-show-plot --save-plot
+python -m pde_solver.pinn_model --equation all --no-show-plot --save-plot
 echo [OK]   Training complete — models saved to models/
 exit /b 0
 
@@ -152,7 +152,7 @@ echo   │                                              │
 echo   │  Press Ctrl+C to stop                        │
 echo   └──────────────────────────────────────────────┘
 echo.
-uvicorn main:app --host 127.0.0.1 --port %PORT% --reload
+uvicorn pde_solver.main:app --host 127.0.0.1 --port %PORT% --reload
 exit /b 0
 
 :: ── Run tests ────────────────────────────────────────────────────────────────

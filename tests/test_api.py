@@ -4,8 +4,8 @@ import pytest
 import torch
 from fastapi.testclient import TestClient
 
-from equations import EQUATIONS
-from model import PhysicsInformedNN
+from pde_solver.equations import EQUATIONS
+from pde_solver.model import PhysicsInformedNN
 
 
 @pytest.fixture(autouse=True)
@@ -34,7 +34,8 @@ def _setup_models(tmp_path, monkeypatch):
 
     # Re-import to pick up the env var
     import importlib
-    import main as main_mod
+
+    from pde_solver import main as main_mod
 
     importlib.reload(main_mod)
     # Manually trigger startup

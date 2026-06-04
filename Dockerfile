@@ -8,11 +8,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY model.py pinn_model.py main.py index.html ./
+COPY pyproject.toml index.html ./
+COPY src ./src
+RUN pip install --no-cache-dir -e .
 
 # --- Training stage (optional — run with: docker build --target train) ---
 FROM base AS train
-RUN python pinn_model.py --no-show-plot --save-plot
+RUN python -m pde_solver.pinn_model --no-show-plot --save-plot
 
 # --- Production stage ---
 FROM base AS production
@@ -25,4 +27,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "pde_solver.main:app", "--host", "0.0.0.0", "--port", "8000"]
